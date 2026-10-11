@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karaoke Mic</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --panel: #1f1b18;
+    --panel-2: #2a2521;
+    --line: #3a332e;
+    --fg: #f1ebe4;
+    --muted: #a89d92;
+    --accent: #ff4d6d;
+    --accent-2: #ffb703;
+    --ok: #4caf7d;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .brand { font-weight: 800; letter-spacing: .02em; font-size: 16px; }
+  .brand span { color: var(--accent); }
+  form { display: flex; gap: 8px; flex: 1; min-width: 260px; }
+  input[type=text] {
+    flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  }
+  button, select, .linkbtn {
+    padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--fg); cursor: pointer; font: inherit;
+    text-decoration: none; display: inline-flex; align-items: center;
+  }
+  button:hover, .linkbtn:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible, input:focus-visible, .linkbtn:focus-visible {
+    outline: 2px solid var(--accent-2); outline-offset: 2px;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 16px 0; gap: 8px; }
+  .stage {
+    flex: 1; min-height: 0; position: relative; background: #000;
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
+  }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .empty {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+    padding: 24px; gap: 8px; color: var(--muted);
+  }
+  .empty h2 { margin: 0; color: var(--fg); font-size: 20px; }
+  .recent { display: flex; gap: 8px; flex-wrap: wrap; min-height: 0; }
+  .recent button { font-size: 12px; padding: 5px 10px; max-width: 240px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; display: block; }
+
+  .blocked {
+    position: absolute; inset: 0; z-index: 2; background: var(--panel);
+    display: grid; place-content: center; justify-items: center; gap: 14px;
+    padding: 24px; text-align: center;
+  }
+  .blocked h2 { margin: 0; font-size: 18px; }
+  .blocked p { margin: 0; color: var(--muted); max-width: 46ch; }
+  .blocked .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  .dock {
+    margin-top: 8px; display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  #micBtn { min-width: 140px; font-weight: 700; justify-content: center; }
+  #micBtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .06em; }
+  label select { max-width: 230px; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  input[type=range] { accent-color: var(--accent); width: 130px; }
+  .meter { width: 130px; height: 12px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 6px; overflow: hidden; }
+  #level { height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--accent-2), var(--accent)); }
+  #status { flex: 1 1 100%; color: var(--muted); font-size: 12px; }
+  #status.err { color: var(--accent-2); }
+  kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Karaoke <span>Mic</span></div>
+  <form id="loadForm">
+    <input type="text" id="url" placeholder="Paste a YouTube karaoke video or playlist link" autocomplete="off">
+    <button class="primary" type="submit">Load</button>
+  </form>
+  <a class="linkbtn" id="searchLink" href="https://www.youtube.com/results?search_query=karaoke" target="_blank" rel="noopener">Find a song on YouTube ↗</a>
+  <a class="linkbtn" id="openYT" href="#" target="_blank" rel="noopener" hidden>Open this video on YouTube ↗</a>
+</header>
+
+<main>
+  <div class="stage" id="stage">
+    <div class="empty" id="empty">
+      <h2>Pick a song, then turn the mic on</h2>
+      <div>Use “Find a song on YouTube”, copy the link of a karaoke video, and paste it above.</div>
+    </div>
+  </div>
+  <div class="recent" id="recent"></div>
+</main>
+
+<div class="dock">
+  <button id="micBtn" type="button">🎤 Mic off</button>
+  <label for="inSel">Microphone
+    <select id="inSel"><option>Allow mic to list devices</option></select>
+  </label>
+  <label for="outSel" id="outWrap">Your voice plays to
+    <select id="outSel"></select>
+  </label>
+  <label for="vol">Mic volume
+    <input type="range" id="vol" min="0" max="200" value="100">
+  </label>
+  <label for="rev">Reverb
+    <input type="range" id="rev" min="0" max="100" value="25">
+  </label>
+  <label>Level
+    <div class="meter"><div id="level"></div></div>
+  </label>
+  <div id="status">Wear headphones so the mic doesn't pick up the song. Press <kbd>M</kbd> to toggle the mic.</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+function setStatus(msg, isErr) {
+  const s = $('status'); s.textContent = msg; s.classList.toggle('err', !!isErr);
+}
+
+/* ---------------- YouTube ---------------- */
+function parseYouTube(input) {
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(input) ? input : 'https://' + input); } catch { return null; }
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  else if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+    if (u.pathname === '/watch') id = u.searchParams.get('v');
+    else {
+      const m = u.pathname.match(/^\/(embed|shorts|live|v)\/([\w-]{11})/);
+      if (m) id = m[2];
+    }
+  } else return null;
+  const list = u.searchParams.get('list');
+  if (!id && !list) return null;
+  return { id, list };
+}
+
+function embedSrc({ id, list }) {
+  const p = new URLSearchParams({ autoplay: '1', rel: '0', playsinline: '1' });
+  if (id) {
+    if (list) p.set('list', list);
+    return `https://www.youtube.com/embed/${id}?${p}`;
+  }
+  p.set('listType', 'playlist'); p.set('list', list);
+  return `https://www.youtube.com/embed/videoseries?${p}`;
+}
+
+let player = null, apiPromise = null, currentWatchUrl = '', loadToken = 0;
+
+function loadYTApi() {
+  if (window.YT && YT.Player) return Promise.resolve();
+  if (apiPromise) return apiPromise;
+  apiPromise = new Promise(resolve => {
+    window.onYouTubeIframeAPIReady = resolve;
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => resolve();
+    document.head.appendChild(s);
+  });
+  return apiPromise;
+}
+
+function watchUrl({ id, list }) {
+  return id
+    ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}${list ? '&list=' + encodeURIComponent(list) : ''}`
+    : `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`;
+}
+
+function openPopup() {
+  const w = window.open(currentWatchUrl, 'karaokeVideo', 'popup=yes,width=1100,height=660');
+  if (!w) setStatus('Your browser blocked the pop-up. Use the “Open on YouTube” link instead.', true);
+  else setStatus('Video opened in its own window. Put it next to this one, then press the mic button.');
+}
+
+function showBlocked() {
+  const stage = $('stage');
+  stage.querySelector('.blocked')?.remove();
+  const box = document.createElement('div');
+  box.className = 'blocked';
+  box.innerHTML =
+    '<h2>This video can’t play inside this page</h2>' +
+    '<p>The uploader has turned off playback on other websites. Your mic still works here. ' +
+    'Open the song in its own window, place it next to this one, and sing as usual.</p>' +
+    '<div class="row"><button type="button" class="primary" id="popBtn">Open in a pop-up window</button>' +
+    '<a class="linkbtn" id="ytLink" target="_blank" rel="noopener">Open on YouTube ↗</a></div>';
+  stage.appendChild(box);
+  $('ytLink').href = currentWatchUrl;
+  $('popBtn').onclick = openPopup;
+  setStatus('This video blocks embedding. Use the pop-up button; your mic keeps working.', true);
+}
+
+async function mountPlayer(parsed) {
+  const stage = $('stage');
+  const token = ++loadToken;
+  $('empty')?.remove();
+  stage.querySelector('.blocked')?.remove();
+  try { player?.destroy(); } catch {}
+  player = null;
+  stage.querySelector('iframe')?.remove();
+  stage.querySelector('#ytHost')?.remove();
+
+  currentWatchUrl = watchUrl(parsed);
+  $('openYT').href = currentWatchUrl;
+  $('openYT').hidden = false;
+
+  const host = document.createElement('div');
+  host.id = 'ytHost';
+  stage.appendChild(host);
+
+  await loadYTApi();
+  if (token !== loadToken) return;
+
+  if (!(window.YT && YT.Player)) {
+    // Player API didn't load: fall back to a plain embed (can't detect blocked videos).
+    host.remove();
+    const f = document.createElement('iframe');
+    f.src = embedSrc(parsed);
+    f.title = 'YouTube karaoke video';
+    f.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    stage.appendChild(f);
+    return;
+  }
+
+  const vars = { autoplay: 1, rel: 0, playsinline: 1 };
+  if (parsed.list) vars.list = parsed.list;
+  if (!parsed.id) vars.listType = 'playlist';
+  player = new YT.Player('ytHost', {
+    width: '100%', height: '100%',
+    videoId: parsed.id || undefined,
+    playerVars: vars,
+    events: {
+      onError: e => {
+        if ([101, 150, 152, 153].includes(e.data)) showBlocked();
+        else if (e.data === 100) setStatus('YouTube says this video was removed or is private.', true);
+        else setStatus('YouTube couldn’t play this video (error ' + e.data + ').', true);
+      },
+    },
+  });
+}
+
+function loadVideo(raw) {
+  const parsed = parseYouTube(raw.trim());
+  if (!parsed) { setStatus('That doesn’t look like a YouTube link. Copy the address from the video page.', true); return; }
+  mountPlayer(parsed);
+  rememberVideo(raw.trim());
+  setStatus(running ? 'Playing. Your mic is live.' : 'Loaded. Press the mic button when you’re ready to sing.');
+}
+
+function recentList() { try { return JSON.parse(store.get('recent', '[]')); } catch { return []; } }
+function rememberVideo(url) {
+  const list = [url, ...recentList().filter(u => u !== url)].slice(0, 6);
+  store.set('recent', JSON.stringify(list));
+  renderRecent();
+}
+function renderRecent() {
+  const box = $('recent'); box.innerHTML = '';
+  recentList().forEach(u => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = u.replace(/^https?:\/\/(www\.)?/, ''); b.title = u;
+    b.onclick = () => { $('url').value = u; loadVideo(u); };
+    box.appendChild(b);
+  });
+}
+
+$('loadForm').addEventListener('submit', e => { e.preventDefault(); if ($('url').value.trim()) loadVideo($('url').value); });
+$('url').addEventListener('paste', () => setTimeout(() => { if (parseYouTube($('url').value.trim())) loadVideo($('url').value); }, 0));
+
+/* ---------------- Mic engine ---------------- */
+let ctx, stream, micGain, dryGain, wetGain, convolver, limiter, analyser, raf;
+let running = false;
+
+function makeImpulse(ac, seconds = 1.8, decay = 3) {
+  const len = Math.floor(ac.sampleRate * seconds);
+  const buf = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
+const canPickOutput = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+if (!canPickOutput) $('outWrap').hidden = true;
+
+async function refreshDevices() {
+  let devs = [];
+  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch {}
+  const fill = (sel, kind, saved, fallback) => {
+    const keep = sel.value || saved;
+    sel.innerHTML = '';
+    const list = devs.filter(d => d.kind === kind);
+    if (!list.length) { const o = document.createElement('option'); o.textContent = fallback; o.value = ''; sel.appendChild(o); return; }
+    list.forEach((d, i) => {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      o.textContent = d.label || `${kind === 'audioinput' ? 'Microphone' : 'Output'} ${i + 1}`;
+      sel.appendChild(o);
+    });
+    if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+  };
+  fill($('inSel'), 'audioinput', store.get('inDev', ''), 'No microphone found');
+  fill($('outSel'), 'audiooutput', store.get('outDev', ''), 'System default');
+}
+
+function applyMix() {
+  if (!running) return;
+  micGain.gain.value = $('vol').value / 100;
+  const r = $('rev').value / 100;
+  dryGain.gain.value = 1 - r * 0.4;
+  wetGain.gain.value = r * 1.2;
+}
+
+async function startMic() {
+  if (running) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('This browser can’t access the mic here. Open the app from localhost or an https address.', true);
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: $('inSel').value ? { exact: $('inSel').value } : undefined,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1,
+        latency: 0,
+      },
+    });
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+    if (canPickOutput && $('outSel').value) { try { await ctx.setSinkId($('outSel').value); } catch {} }
+    await ctx.resume();
+
+    const src = ctx.createMediaStreamSource(stream);
+    micGain = ctx.createGain(); dryGain = ctx.createGain(); wetGain = ctx.createGain();
+    convolver = ctx.createConvolver(); convolver.buffer = makeImpulse(ctx);
+    // Gentle limiter so a sudden shout or feedback squeal can't hurt your ears.
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6; limiter.knee.value = 0; limiter.ratio.value = 20;
+    limiter.attack.value = 0.002; limiter.release.value = 0.1;
+    analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+
+    src.connect(micGain);
+    micGain.connect(analyser);
+    micGain.connect(dryGain).connect(limiter);
+    micGain.connect(convolver).connect(wetGain).connect(limiter);
+    limiter.connect(ctx.destination);
+
+    running = true;
+    applyMix();
+    await refreshDevices();
+    meter();
+    $('micBtn').textContent = '🎤 Mic on';
+    $('micBtn').classList.add('on');
+    const ms = Math.round(((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000);
+    setStatus(`Live. Browser audio delay about ${ms} ms, plus whatever your USB mic and headphones add.`);
+  } catch (err) {
+    const denied = err.name === 'NotAllowedError';
+    stopMic();
+    setStatus(denied ? 'Mic access was blocked. Click the lock icon in the address bar, allow the microphone, and try again.'
+                     : 'Couldn’t start the mic: ' + err.message, true);
+  }
+}
+
+function stopMic() {
+  running = false;
+  cancelAnimationFrame(raf);
+  stream?.getTracks().forEach(t => t.stop());
+  ctx?.close();
+  ctx = stream = null;
+  $('level').style.width = '0';
+  $('micBtn').textContent = '🎤 Mic off';
+  $('micBtn').classList.remove('on');
+}
+
+function meter() {
+  const data = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (const v of data) peak = Math.max(peak, Math.abs(v - 128));
+    $('level').style.width = Math.min(100, (peak / 128) * 140) + '%';
+    raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function toggleMic() { if (running) { stopMic(); setStatus('Mic off.'); } else startMic(); }
+$('micBtn').onclick = toggleMic;
+document.addEventListener('keydown', e => {
+  if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey &&
+      !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName)) toggleMic();
+});
+
+$('vol').oninput = () => { applyMix(); store.set('vol', $('vol').value); };
+$('rev').oninput = () => { applyMix(); store.set('rev', $('rev').value); };
+$('inSel').onchange = () => { store.set('inDev', $('inSel').value); if (running) { stopMic(); startMic(); } };
+$('outSel').onchange = () => { store.set('outDev', $('outSel').value); if (running) { stopMic(); startMic(); } };
+navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+
+/* ---------------- Boot ---------------- */
+$('vol').value = store.get('vol', 100);
+$('rev').value = store.get('rev', 25);
+renderRecent();
+refreshDevices();
+</script>
+</body>
+</html>
