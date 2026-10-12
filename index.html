@@ -45,6 +45,7 @@
     outline: 2px solid var(--accent-2); outline-offset: 2px;
   }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled, input:disabled { opacity: .45; cursor: not-allowed; }
 
   main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 16px 0; gap: 8px; }
   .stage {
@@ -70,21 +71,51 @@
   .blocked p { margin: 0; color: var(--muted); max-width: 46ch; }
   .blocked .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
+  /* Floating controls over the video */
+  .float {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 10px; z-index: 3;
+  }
+  .fab {
+    width: 56px; height: 56px; padding: 0; border-radius: 50%; justify-content: center;
+    font-size: 22px; background: rgba(31,27,24,.82); border: 1px solid var(--line);
+  }
+  .fab.small { width: 40px; height: 40px; font-size: 18px; align-self: center; }
+  .fab.on { background: var(--accent); border-color: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .fab.on { animation: pulse 1.6s infinite; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,77,109,.55); }
+      70% { box-shadow: 0 0 0 14px rgba(255,77,109,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,77,109,0); }
+    }
+  }
+
   .dock {
-    margin-top: 8px; display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end;
+    margin-top: 8px; display: flex; flex-direction: column; gap: 12px;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--panel); border-top: 1px solid var(--line);
   }
+  .row { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
   #micBtn { min-width: 140px; font-weight: 700; justify-content: center; }
   #micBtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted);
     text-transform: uppercase; letter-spacing: .06em; }
   label select { max-width: 230px; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  label.check { flex-direction: row; align-items: center; gap: 8px; text-transform: none;
+    letter-spacing: 0; font-size: 13px; color: var(--fg); padding-bottom: 9px; }
   input[type=range] { accent-color: var(--accent); width: 130px; }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .chan {
+    display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end;
+    padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+  }
+  .chan[hidden] { display: none; }
+  .chan-title { font-weight: 700; font-size: 12px; color: var(--accent-2); align-self: center; }
   .meter { width: 130px; height: 12px; background: var(--bg); border: 1px solid var(--line);
-    border-radius: 6px; overflow: hidden; }
-  #level { height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--accent-2), var(--accent)); }
-  #status { flex: 1 1 100%; color: var(--muted); font-size: 12px; }
+    border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+  .lvl { height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--accent-2), var(--accent)); }
+  #status { color: var(--muted); font-size: 12px; }
   #status.err { color: var(--accent-2); }
   kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
 </style>
@@ -106,27 +137,55 @@
       <h2>Pick a song, then turn the mic on</h2>
       <div>Use “Find a song on YouTube”, copy the link of a karaoke video, and paste it above.</div>
     </div>
+    <div class="float">
+      <button id="floatMic" class="fab" type="button" aria-pressed="false" aria-label="Turn microphone on or off" title="Mic on/off">🎤</button>
+      <button id="fsBtn" class="fab small" type="button" aria-label="Fullscreen" title="Fullscreen (Esc to exit)">⛶</button>
+    </div>
   </div>
   <div class="recent" id="recent"></div>
 </main>
 
 <div class="dock">
-  <button id="micBtn" type="button">🎤 Mic off</button>
-  <label for="inSel">Microphone
-    <select id="inSel"><option>Allow mic to list devices</option></select>
-  </label>
-  <label for="outSel" id="outWrap">Your voice plays to
-    <select id="outSel"></select>
-  </label>
-  <label for="vol">Mic volume
-    <input type="range" id="vol" min="0" max="200" value="100">
-  </label>
-  <label for="rev">Reverb
-    <input type="range" id="rev" min="0" max="100" value="25">
-  </label>
-  <label>Level
-    <div class="meter"><div id="level"></div></div>
-  </label>
+  <div class="row">
+    <button id="micBtn" type="button">🎤 Mic off</button>
+    <label for="outSel" id="outWrap">Your voice plays to
+      <select id="outSel"></select>
+    </label>
+    <button id="testBtn" type="button" title="Plays a short chime to the output chosen here">Test sound</button>
+    <label for="songVol">Song volume
+      <input type="range" id="songVol" min="0" max="100" value="100">
+    </label>
+    <label for="rev">Reverb
+      <input type="range" id="rev" min="0" max="100" value="25">
+    </label>
+    <label class="check" for="guard"><input type="checkbox" id="guard" checked> Feedback guard</label>
+  </div>
+
+  <div class="row">
+    <div class="chan" id="chan1">
+      <span class="chan-title">Mic 1</span>
+      <label for="inSel1">Microphone
+        <select id="inSel1"><option>Press Mic on to list devices</option></select>
+      </label>
+      <label for="vol1">Volume
+        <input type="range" id="vol1" min="0" max="200" value="100">
+      </label>
+      <div class="meter" title="Mic 1 level"><div class="lvl" id="level1"></div></div>
+    </div>
+    <div class="chan" id="chan2" hidden>
+      <span class="chan-title">Mic 2</span>
+      <label for="inSel2">Microphone
+        <select id="inSel2"></select>
+      </label>
+      <label for="vol2">Volume
+        <input type="range" id="vol2" min="0" max="200" value="100">
+      </label>
+      <div class="meter" title="Mic 2 level"><div class="lvl" id="level2"></div></div>
+      <button id="removeMic" type="button">Remove</button>
+    </div>
+    <button id="addMic" type="button">+ Add a second mic</button>
+  </div>
+
   <div id="status">Wear headphones so the mic doesn't pick up the song. Press <kbd>M</kbd> to toggle the mic.</div>
 </div>
 
@@ -139,6 +198,7 @@ const store = {
 function setStatus(msg, isErr) {
   const s = $('status'); s.textContent = msg; s.classList.toggle('err', !!isErr);
 }
+const optText = sel => sel.options[sel.selectedIndex]?.textContent || 'the selected device';
 
 /* ---------------- YouTube ---------------- */
 function parseYouTube(input) {
@@ -190,6 +250,18 @@ function watchUrl({ id, list }) {
     : `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`;
 }
 
+/* Song volume (only possible for videos playing inside this page) */
+function songVolUI() {
+  const ok = !!(player && typeof player.setVolume === 'function');
+  $('songVol').disabled = !ok;
+  $('songVol').title = ok ? '' : 'Works for videos playing inside this page';
+}
+function applySongVol() {
+  if (player && typeof player.setVolume === 'function') {
+    try { player.setVolume(+$('songVol').value); } catch {}
+  }
+}
+
 function openPopup() {
   const w = window.open(currentWatchUrl, 'karaokeVideo', 'popup=yes,width=1100,height=660');
   if (!w) setStatus('Your browser blocked the pop-up. Use the “Open on YouTube” link instead.', true);
@@ -210,6 +282,8 @@ function showBlocked() {
   stage.appendChild(box);
   $('ytLink').href = currentWatchUrl;
   $('popBtn').onclick = openPopup;
+  $('songVol').disabled = true;
+  $('songVol').title = 'Not available for pop-up videos. Use the volume in that window.';
   setStatus('This video blocks embedding. Use the pop-up button; your mic keeps working.', true);
 }
 
@@ -220,6 +294,7 @@ async function mountPlayer(parsed) {
   stage.querySelector('.blocked')?.remove();
   try { player?.destroy(); } catch {}
   player = null;
+  songVolUI();
   stage.querySelector('iframe')?.remove();
   stage.querySelector('#ytHost')?.remove();
 
@@ -229,7 +304,7 @@ async function mountPlayer(parsed) {
 
   const host = document.createElement('div');
   host.id = 'ytHost';
-  stage.appendChild(host);
+  stage.insertBefore(host, stage.firstChild);
 
   await loadYTApi();
   if (token !== loadToken) return;
@@ -243,7 +318,7 @@ async function mountPlayer(parsed) {
     f.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media';
     f.allowFullscreen = true;
     f.referrerPolicy = 'strict-origin-when-cross-origin';
-    stage.appendChild(f);
+    stage.insertBefore(f, stage.firstChild);
     return;
   }
 
@@ -255,6 +330,7 @@ async function mountPlayer(parsed) {
     videoId: parsed.id || undefined,
     playerVars: vars,
     events: {
+      onReady: () => { songVolUI(); applySongVol(); },
       onError: e => {
         if ([101, 150, 152, 153].includes(e.data)) showBlocked();
         else if (e.data === 100) setStatus('YouTube says this video was removed or is private.', true);
@@ -292,8 +368,20 @@ $('loadForm').addEventListener('submit', e => { e.preventDefault(); if ($('url')
 $('url').addEventListener('paste', () => setTimeout(() => { if (parseYouTube($('url').value.trim())) loadVideo($('url').value); }, 0));
 
 /* ---------------- Mic engine ---------------- */
-let ctx, stream, micGain, dryGain, wetGain, convolver, limiter, analyser, raf;
-let running = false;
+const GUARD_RMS = 0.4;   // steady level that counts as a feedback squeal
+const GUARD_MS = 1200;   // how long it must last before the mic is muted
+
+const channels = [
+  { n: 1, sel: $('inSel1'), vol: $('vol1'), level: $('level1'), stream: null, src: null, gain: null, an: null, buf: null },
+  { n: 2, sel: $('inSel2'), vol: $('vol2'), level: $('level2'), stream: null, src: null, gain: null, an: null, buf: null },
+];
+let ctx = null, mixBus, dryGain, wetGain, convolver, shaper, guardAn, guardBuf;
+let running = false, starting = false, tickTimer = null, lastStartAt = 0, loudSince = 0;
+let use2 = false, note = '';
+const groups = {}; // deviceId -> groupId, to tell when two entries are the same physical mic
+
+const canPickOutput = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+if (!canPickOutput) $('outWrap').hidden = true;
 
 function makeImpulse(ac, seconds = 1.8, decay = 3) {
   const len = Math.floor(ac.sampleRate * seconds);
@@ -305,128 +393,307 @@ function makeImpulse(ac, seconds = 1.8, decay = 3) {
   return buf;
 }
 
-const canPickOutput = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
-if (!canPickOutput) $('outWrap').hidden = true;
+// Soft clipper: leaves normal levels untouched, rounds off loud peaks, adds no gain.
+function softClipCurve(n = 2048) {
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1, a = Math.abs(x);
+    const y = a <= 0.6 ? a : 0.6 + 0.4 * Math.tanh((a - 0.6) / 0.4);
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
+}
+
+function fillSelect(sel, list, saved, emptyText, word, avoidGroup) {
+  const current = sel.value;
+  sel.innerHTML = '';
+  if (!list.length) {
+    const o = document.createElement('option'); o.value = ''; o.textContent = emptyText; sel.appendChild(o);
+    return;
+  }
+  list.forEach((d, i) => {
+    const o = document.createElement('option');
+    o.value = d.deviceId;
+    o.textContent = d.label || `${word} ${i + 1}`;
+    sel.appendChild(o);
+  });
+  const ids = list.map(d => d.deviceId);
+  let pick = ids.includes(saved) ? saved : (ids.includes(current) ? current : '');
+  if (!pick && avoidGroup !== undefined) {
+    pick = list.find(d => d.groupId !== avoidGroup)?.deviceId || '';
+  }
+  sel.value = pick || ids[0];
+}
 
 async function refreshDevices() {
   let devs = [];
   try { devs = await navigator.mediaDevices.enumerateDevices(); } catch {}
-  const fill = (sel, kind, saved, fallback) => {
-    const keep = sel.value || saved;
-    sel.innerHTML = '';
-    const list = devs.filter(d => d.kind === kind);
-    if (!list.length) { const o = document.createElement('option'); o.textContent = fallback; o.value = ''; sel.appendChild(o); return; }
-    list.forEach((d, i) => {
-      const o = document.createElement('option');
-      o.value = d.deviceId;
-      o.textContent = d.label || `${kind === 'audioinput' ? 'Microphone' : 'Output'} ${i + 1}`;
-      sel.appendChild(o);
-    });
-    if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
-  };
-  fill($('inSel'), 'audioinput', store.get('inDev', ''), 'No microphone found');
-  fill($('outSel'), 'audiooutput', store.get('outDev', ''), 'System default');
+  devs = devs.filter(d => d.deviceId !== 'communications');
+  const ins = devs.filter(d => d.kind === 'audioinput');
+  const outs = devs.filter(d => d.kind === 'audiooutput');
+  devs.forEach(d => { groups[d.deviceId] = d.groupId; });
+  fillSelect(channels[0].sel, ins, store.get('inDev1', store.get('inDev', '')), 'No microphone found', 'Microphone');
+  fillSelect(channels[1].sel, ins, store.get('inDev2', ''), 'No microphone found', 'Microphone',
+             groups[channels[0].sel.value]);
+  fillSelect($('outSel'), outs, store.get('outDev', ''), 'System default', 'Output');
+}
+
+function sameDevice(a, b) {
+  return !!a && !!b && (a === b || (groups[a] && groups[a] === groups[b]));
+}
+
+async function openStream(ch) {
+  const build = id => ({
+    audio: {
+      deviceId: id ? { exact: id } : undefined,
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      channelCount: 1, latency: 0,
+    },
+  });
+  try {
+    ch.stream = await navigator.mediaDevices.getUserMedia(build(ch.sel.value));
+  } catch (err) {
+    if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
+      ch.stream = await navigator.mediaDevices.getUserMedia(build(''));   // saved mic is gone
+    } else throw err;
+  }
+}
+function stopStream(ch) { ch.stream?.getTracks().forEach(t => t.stop()); ch.stream = null; }
+
+function setMicUI(on) {
+  $('micBtn').textContent = on ? '🎤 Mic on' : '🎤 Mic off';
+  $('micBtn').classList.toggle('on', on);
+  $('floatMic').classList.toggle('on', on);
+  $('floatMic').setAttribute('aria-pressed', String(on));
 }
 
 function applyMix() {
   if (!running) return;
-  micGain.gain.value = $('vol').value / 100;
+  channels.forEach(ch => { if (ch.gain) ch.gain.gain.value = ch.vol.value / 100; });
   const r = $('rev').value / 100;
   dryGain.gain.value = 1 - r * 0.4;
   wetGain.gain.value = r * 1.2;
 }
 
 async function startMic() {
-  if (running) return;
+  if (running || starting) return;
   if (!navigator.mediaDevices?.getUserMedia) {
     setStatus('This browser can’t access the mic here. Open the app from localhost or an https address.', true);
     return;
   }
+  starting = true;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: $('inSel').value ? { exact: $('inSel').value } : undefined,
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        channelCount: 1,
-        latency: 0,
-      },
-    });
+    const [c1, c2] = channels;
+    await openStream(c1);
+    await refreshDevices();   // labels and real device ids are only available after permission
+    const real = c1.stream.getAudioTracks()[0]?.getSettings?.().deviceId;
+    if (c1.sel.value && real && c1.sel.value !== real) {   // apply the saved choice on the first run
+      stopStream(c1);
+      await openStream(c1);
+    }
+
+    let warn2 = '';
+    if (use2) {
+      if (!c2.sel.value) warn2 = 'Pick a microphone for Mic 2.';
+      else if (sameDevice(c1.sel.value, c2.sel.value)) warn2 = 'Mic 2 is the same microphone as Mic 1, so it was left off.';
+      else {
+        try { await openStream(c2); }
+        catch (e) { warn2 = `Couldn’t open Mic 2 (${e.message}).`; c2.stream = null; }
+      }
+    }
+
     ctx = new AudioContext({ latencyHint: 'interactive' });
-    if (canPickOutput && $('outSel').value) { try { await ctx.setSinkId($('outSel').value); } catch {} }
+    let outLabel = 'the system default output', sinkWarn = '';
+    if (canPickOutput && $('outSel').value) {
+      const label = optText($('outSel'));
+      try { await ctx.setSinkId($('outSel').value); outLabel = label; }
+      catch (e) {
+        sinkWarn = `Couldn’t send your voice to “${label}” (${e.name || 'error'}), so it’s going to the system default instead. ` +
+                   'Pick another output and press Mic on again, or use Test sound to check.';
+      }
+    }
     await ctx.resume();
 
-    const src = ctx.createMediaStreamSource(stream);
-    micGain = ctx.createGain(); dryGain = ctx.createGain(); wetGain = ctx.createGain();
+    mixBus = ctx.createGain();
+    dryGain = ctx.createGain(); wetGain = ctx.createGain();
     convolver = ctx.createConvolver(); convolver.buffer = makeImpulse(ctx);
-    // Gentle limiter so a sudden shout or feedback squeal can't hurt your ears.
-    limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -6; limiter.knee.value = 0; limiter.ratio.value = 20;
-    limiter.attack.value = 0.002; limiter.release.value = 0.1;
-    analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+    shaper = ctx.createWaveShaper(); shaper.curve = softClipCurve(); shaper.oversample = '2x';
+    guardAn = ctx.createAnalyser(); guardAn.fftSize = 1024; guardBuf = new Float32Array(guardAn.fftSize);
 
-    src.connect(micGain);
-    micGain.connect(analyser);
-    micGain.connect(dryGain).connect(limiter);
-    micGain.connect(convolver).connect(wetGain).connect(limiter);
-    limiter.connect(ctx.destination);
+    mixBus.connect(guardAn);
+    mixBus.connect(dryGain).connect(shaper);
+    mixBus.connect(convolver).connect(wetGain).connect(shaper);
+    shaper.connect(ctx.destination);
+
+    channels.forEach(ch => {
+      if (!ch.stream) return;
+      ch.src = ctx.createMediaStreamSource(ch.stream);
+      ch.gain = ctx.createGain();
+      ch.an = ctx.createAnalyser(); ch.an.fftSize = 512; ch.buf = new Float32Array(ch.an.fftSize);
+      ch.src.connect(ch.gain);
+      ch.gain.connect(ch.an);
+      ch.gain.connect(mixBus);
+    });
 
     running = true;
+    lastStartAt = Date.now();
     applyMix();
-    await refreshDevices();
-    meter();
-    $('micBtn').textContent = '🎤 Mic on';
-    $('micBtn').classList.add('on');
+    loudSince = 0;
+    tickTimer = setInterval(tick, 50);
+    setMicUI(true);
+
     const ms = Math.round(((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000);
-    setStatus(`Live. Browser audio delay about ${ms} ms, plus whatever your USB mic and headphones add.`);
+    const live = `Live → ${outLabel}.` + (ms > 0 ? ` Browser audio delay about ${ms} ms, plus your mic and speakers.` : '');
+    if (sinkWarn) setStatus(note + sinkWarn, true);
+    else if (warn2) setStatus(note + warn2, true);
+    else if (c2.stream) setStatus(note + live + ' Two open mics make feedback more likely, so keep both volumes low.');
+    else setStatus(note + live);
+    note = '';
   } catch (err) {
     const denied = err.name === 'NotAllowedError';
     stopMic();
     setStatus(denied ? 'Mic access was blocked. Click the lock icon in the address bar, allow the microphone, and try again.'
                      : 'Couldn’t start the mic: ' + err.message, true);
+  } finally {
+    starting = false;
   }
 }
 
 function stopMic() {
   running = false;
-  cancelAnimationFrame(raf);
-  stream?.getTracks().forEach(t => t.stop());
-  ctx?.close();
-  ctx = stream = null;
-  $('level').style.width = '0';
-  $('micBtn').textContent = '🎤 Mic off';
-  $('micBtn').classList.remove('on');
+  clearInterval(tickTimer); tickTimer = null; loudSince = 0;
+  channels.forEach(ch => {
+    try { ch.src?.disconnect(); ch.gain?.disconnect(); } catch {}
+    stopStream(ch);
+    ch.src = ch.gain = ch.an = ch.buf = null;
+    ch.level.style.width = '0';
+  });
+  guardAn = null;
+  try { ctx?.close(); } catch {}
+  ctx = null;
+  setMicUI(false);
 }
 
-function meter() {
-  const data = new Uint8Array(analyser.fftSize);
-  const tick = () => {
-    analyser.getByteTimeDomainData(data);
+function feedbackTrip() {
+  stopMic();
+  setStatus('Feedback detected, so the mic was muted. Turn the speakers down, lower the mic volume, or move the mic away from the speakers, then press Mic on.', true);
+}
+
+function tick() {
+  if (!running) return;
+  const now = performance.now();
+  for (const ch of channels) {
+    if (!ch.an) { ch.level.style.width = '0'; continue; }
+    ch.an.getFloatTimeDomainData(ch.buf);
     let peak = 0;
-    for (const v of data) peak = Math.max(peak, Math.abs(v - 128));
-    $('level').style.width = Math.min(100, (peak / 128) * 140) + '%';
-    raf = requestAnimationFrame(tick);
-  };
-  tick();
+    for (const v of ch.buf) { const a = Math.abs(v); if (a > peak) peak = a; }
+    ch.level.style.width = Math.min(100, peak * 140) + '%';
+  }
+  if ($('guard').checked && guardAn) {
+    guardAn.getFloatTimeDomainData(guardBuf);
+    let s = 0;
+    for (const v of guardBuf) s += v * v;
+    const rms = Math.sqrt(s / guardBuf.length);
+    if (rms > GUARD_RMS) {
+      if (!loudSince) loudSince = now;
+      else if (now - loudSince > GUARD_MS) feedbackTrip();
+    } else loudSince = 0;
+  }
 }
 
 function toggleMic() { if (running) { stopMic(); setStatus('Mic off.'); } else startMic(); }
+async function restartIfRunning() { if (running) { stopMic(); await startMic(); } }
+
+/* Test sound: a short two-note chime to the chosen output, so you can hear whether routing is right */
+async function testSound() {
+  let ac;
+  try {
+    ac = new AudioContext();
+    let where = 'the system default output';
+    if (canPickOutput && $('outSel').value) {
+      await ac.setSinkId($('outSel').value);
+      where = optText($('outSel'));
+    }
+    await ac.resume();
+    const t = ac.currentTime;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.connect(ac.destination);
+    [[523.25, 0], [659.25, 0.3]].forEach(([f, off]) => {
+      const o = ac.createOscillator();
+      o.type = 'sine'; o.frequency.value = f;
+      o.connect(g);
+      g.gain.setValueAtTime(0.0001, t + off);
+      g.gain.exponentialRampToValueAtTime(0.18, t + off + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.28);
+      o.start(t + off); o.stop(t + off + 0.3);
+    });
+    setTimeout(() => ac.close().catch(() => {}), 1200);
+    setStatus(`Test chime sent to: ${where}. If you didn’t hear it, pick a different output in “Your voice plays to”.`);
+  } catch (err) {
+    try { ac?.close(); } catch {}
+    setStatus('Couldn’t play the test sound: ' + (err.message || err.name), true);
+  }
+}
+
+/* ---------------- Wiring ---------------- */
 $('micBtn').onclick = toggleMic;
+$('floatMic').onclick = toggleMic;
+$('testBtn').onclick = testSound;
+$('fsBtn').onclick = () => {
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  const p = $('stage').requestFullscreen?.();
+  p?.catch(() => setStatus('Fullscreen isn’t available here.', true));
+};
 document.addEventListener('keydown', e => {
   if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey &&
       !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName)) toggleMic();
 });
 
-$('vol').oninput = () => { applyMix(); store.set('vol', $('vol').value); };
+channels.forEach(ch => {
+  ch.vol.oninput = () => { applyMix(); store.set('vol' + ch.n, ch.vol.value); };
+  ch.sel.onchange = () => { store.set('inDev' + ch.n, ch.sel.value); restartIfRunning(); };
+});
 $('rev').oninput = () => { applyMix(); store.set('rev', $('rev').value); };
-$('inSel').onchange = () => { store.set('inDev', $('inSel').value); if (running) { stopMic(); startMic(); } };
-$('outSel').onchange = () => { store.set('outDev', $('outSel').value); if (running) { stopMic(); startMic(); } };
-navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+$('outSel').onchange = () => { store.set('outDev', $('outSel').value); restartIfRunning(); };
+$('songVol').oninput = () => { applySongVol(); store.set('songVol', $('songVol').value); };
+$('guard').onchange = () => { store.set('guard', $('guard').checked ? '1' : '0'); loudSince = 0; };
+
+function setUse2(on) {
+  use2 = on;
+  store.set('use2', on ? '1' : '0');
+  $('chan2').hidden = !on;
+  $('addMic').hidden = on;
+}
+$('addMic').onclick = async () => {
+  setUse2(true);
+  await refreshDevices();
+  setStatus('Mic 2 added. Pick its microphone, and keep both volumes low to avoid feedback.');
+  restartIfRunning();
+};
+$('removeMic').onclick = () => { setUse2(false); restartIfRunning(); };
+
+// Reconnect automatically when devices are plugged in, unplugged, or the Windows default changes.
+let devTimer = null;
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  clearTimeout(devTimer);
+  devTimer = setTimeout(async () => {
+    await refreshDevices();
+    if (running && Date.now() - lastStartAt > 2000) {
+      note = 'Audio devices changed, so the mic was reconnected. ';
+      stopMic();
+      await startMic();
+    }
+  }, 500);
+});
 
 /* ---------------- Boot ---------------- */
-$('vol').value = store.get('vol', 100);
+channels.forEach(ch => { ch.vol.value = store.get('vol' + ch.n, ch.n === 1 ? store.get('vol', '100') : '100'); });
 $('rev').value = store.get('rev', 25);
+$('songVol').value = store.get('songVol', 100);
+$('guard').checked = store.get('guard', '1') === '1';
+setUse2(store.get('use2', '0') === '1');
+songVolUI();
 renderRecent();
 refreshDevices();
 </script>
